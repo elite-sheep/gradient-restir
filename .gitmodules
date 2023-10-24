@@ -1,6 +1,3 @@
-[submodule "external/MaterialX"]
-	path = external/MaterialX
-	url = https://github.com/tomas-davidovic/MaterialX.git
 [submodule "external/args"]
 	path = external/args
 	url = https://github.com/Taywee/args.git
@@ -19,9 +16,6 @@
 [submodule "external/pybind11"]
 	path = external/pybind11
 	url = https://github.com/skallweitNV/pybind11.git
-[submodule "external/tiny-cuda-nn"]
-	path = external/tiny-cuda-nn
-	url = https://gitlab-master.nvidia.com/tmueller/tiny-cuda-nn.git
 [submodule "external/vulkan-headers"]
 	path = external/vulkan-headers
 	url = https://github.com/KhronosGroup/Vulkan-Headers
