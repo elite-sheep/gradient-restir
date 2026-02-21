@@ -56,6 +56,23 @@ public:
         }
     );
 
+    // This is for subpixel random sample -> pixel has differenet sample
+    enum class SubPixelRandom : uint
+    {
+        None = 0,
+        UnitQuad = 1, // this assumes the sampling pdf is 1.0
+        Gaussian = 2
+    };
+
+    FALCOR_ENUM_INFO(
+        SubPixelRandom,
+        {
+            {SubPixelRandom::None, "None"},
+            {SubPixelRandom::UnitQuad, "UnitQuad"},
+            {SubPixelRandom::Gaussian, "Gaussian"},
+        }
+    );
+
     virtual void renderUI(Gui::Widgets& widget) override;
     virtual void execute(RenderContext* pRenderContext, const RenderData& renderData) override;
     virtual Properties getProperties() const override;
@@ -70,7 +87,6 @@ protected:
     ref<Texture> getOutput(const RenderData& renderData, const std::string& name) const;
 
     // Internal state
-
     ref<Scene> mpScene;
     /// Sample generator for camera jitter.
     ref<CPUSampleGenerator> mpSampleGenerator;
@@ -103,6 +119,20 @@ protected:
 
     /// Indicates whether any options that affect the output have changed since last frame.
     bool mOptionsChanged = false;
+
+    // For area sampling
+    bool mClampMotionVector = false;
+    float mMotionVecThreshold = 0.001f;
+    SubPixelRandom mSubPixelRandom = SubPixelRandom::None;
+    bool mUseGaussianFilter = false;
+    float mAreaScaler = 4.0f; // 0.5 + scaler * [-0.5, 0.5]
+    float mFilterAlpha = 2.0f;
+    bool mSameSubpixelRandomForAllPixels = false;
+
+    // Pixel debugging
+    int     mUseFixedSeed = false;       ///< Use fixed random seed. This is useful for debugging.
+    uint    mFixedSeed = 1;              ///< The seed to use when 'useFixedSeed' is enabled.
 };
 
 FALCOR_ENUM_REGISTER(GBufferBase::SamplePattern);
+FALCOR_ENUM_REGISTER(GBufferBase::SubPixelRandom);

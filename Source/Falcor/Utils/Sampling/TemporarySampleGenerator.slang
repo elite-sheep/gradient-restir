@@ -70,6 +70,17 @@ public struct TemporarySampleGenerator : ISampleGenerator
         return value;
     }
 
+    uint getCount()
+    {
+        return this.sampleCount;
+    }
+
+    [mutating]
+    void setCount(uint newValue)
+    {
+        this.sampleCount = newValue;
+    }
+
     [mutating] void mutate(float3 samplesForMutation)
     {
         rands.x = mutate(rands.x, samplesForMutation.x);
@@ -81,6 +92,7 @@ public struct TemporarySampleGenerator : ISampleGenerator
     {
         this.rands = _rands;
         idx = 0;
+        this.sampleCount = 0u;
     }
 
     /** Returns the next sample value. This function updates the state.
@@ -97,9 +109,11 @@ public struct TemporarySampleGenerator : ISampleGenerator
 
     [mutating] float sampleNext1D()
     {
+        ++sampleCount;
         return nextFloat();
     }
 
+    uint sampleCount;
     float3 rands;
     int idx;
 };

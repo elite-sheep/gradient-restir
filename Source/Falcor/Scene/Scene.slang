@@ -751,23 +751,24 @@ struct Scene
     {
         return curveVertices[index];
     }
-
     /** Returns the interpolated vertex attributes for a curve segment.
-        \param[in] instanceID Geometry instance ID of the curve.
-        \param[in] curveSegIndex Index of the curve segment in the given curve.
-        \param[in] uv UV parameters (between 0 and 1) of the ray-curve hit point.
-        \return Interpolated vertex attributes.
-    */
-    VertexData getVertexDataFromCurve(const GeometryInstanceID instanceID, const uint curveSegIndex, const float2 uv)
+    \param[in] instanceID Geometry instance ID of the curve.
+    \param[in] curveSegIndex Index of the curve segment in the given curve.
+    \param[in] uv UV parameters (between 0 and 1) of the ray-curve hit point.
+    \return Interpolated vertex attributes.
+*/
+    VertexData getVertexDataFromCurve( const GeometryInstanceID instanceID, const uint curveSegIndex, const float2 uv, bool isPrevFrame = false )
     {
-        const uint v0Index = getFirstCurveVertexIndex(instanceID, curveSegIndex);
+        const uint v0Index = getFirstCurveVertexIndex(instanceID, curveSegIndex); // curveSegIndex = primitiveIndex
         VertexData v = {};
 
         StaticCurveVertexData vertices[2] = { getCurveVertex(v0Index), getCurveVertex(v0Index + 1) };
 
         // Note that worldMat should have an isotropic scale component.
         // Otherwise the curve endcaps might not be spheres.
-        const float4x4 worldMat = getWorldMatrix(instanceID);
+        float4x4 worldMat;
+        if (isPrevFrame) worldMat = getPrevWorldMatrix(instanceID);
+        else worldMat = getWorldMatrix(instanceID);
         const float4 sphereA = transformSphere(float4(vertices[0].position, vertices[0].radius), worldMat);
         const float4 sphereB = transformSphere(float4(vertices[1].position, vertices[1].radius), worldMat);
 
@@ -788,6 +789,8 @@ struct Scene
         // All curve segments in a strand share the same texture coordinates (i.e., determined at the root of the strand).
         v.texC = vertices[0].texCrd * (1.f - uv.x) + vertices[1].texCrd * uv.x;
 
+        // print("v0Index = ", v0Index);
+
         return v;
     }
 
@@ -795,9 +798,9 @@ struct Scene
         \param[in] hit Curve hit info.
         \return Interpolated vertex attributes.
     */
-    VertexData getVertexDataFromCurve(const CurveHit hit)
+    VertexData getVertexDataFromCurve(const CurveHit hit, bool isPrevFrame = false)
     {
-        return getVertexDataFromCurve(hit.instanceID, hit.primitiveIndex, hit.barycentrics);
+        return getVertexDataFromCurve(hit.instanceID, hit.primitiveIndex, hit.barycentrics, isPrevFrame);
     }
 
     /** Returns interpolated position on a curve in world space for the previous frame.

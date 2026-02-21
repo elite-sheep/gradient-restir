@@ -1,5 +1,5 @@
 /***************************************************************************
- # Copyright (c) 2015-23, NVIDIA CORPORATION. All rights reserved.
+ # Copyright (c) 2015-21, NVIDIA CORPORATION. All rights reserved.
  #
  # Redistribution and use in source and binary forms, with or without
  # modification, are permitted provided that the following conditions
@@ -27,21 +27,28 @@
  **************************************************************************/
 import Scene.RaytracingInline;
 import VBufferRT;
+import Utils.Debug.PixelDebug;
+import Utils.Math.MathHelpers;
+
+// import LoadShadingData;
 
 ConstantBuffer<VBufferRT> gVBufferRT;
 
 [numthreads(16, 16, 1)]
-void main(uint3 dispatchThreadId: SV_DispatchThreadID)
+void main(uint3 dispatchThreadId : SV_DispatchThreadID)
 {
     uint2 pixel = dispatchThreadId.xy;
-    if (any(pixel >= gVBufferRT.frameDim))
-        return;
+    if (any(pixel >= gVBufferRT.frameDim)) return;
+
+    printSetPixel(pixel);
 
     GpuTimer timer;
     gVBufferRT.beginTime(timer);
 
+    // Generate the primary ray from the camera using selected method
     const Ray ray = gVBufferRT.generateRay(pixel);
 
+    // Trace primary ray
     SceneRayQuery<VBufferRT::kUseAlphaTest> sceneRayQuery;
     HitInfo hit;
     float hitT;
@@ -53,8 +60,55 @@ void main(uint3 dispatchThreadId: SV_DispatchThreadID)
     {
         gVBufferRT.writeMiss(pixel, ray.origin, ray.dir);
     }
-
     gVBufferRT.writeAux(pixel, ray);
+
+    // Also compute the pixel center vbuffer (different from subpixel sample's vbuffer) + motion vector
+    Ray centerRay = ray;
+    HitInfo centerHit = hit;
+    float centerHitT = hitT;
+    if (gVBufferRT.subPixelRandom != 0 || gVBufferRT.kComputeDepthOfField || gScene.camera.data.jitterX != 0.0f || gScene.camera.data.jitterY != 0.0f)
+    {
+        // Trace new ray at the pixel center
+        centerRay = gScene.camera.computeRayPinholeSubPixelRandom(pixel, gVBufferRT.frameDim, float2(0.5f));
+
+        // Write center hit
+        centerHit;
+        centerHitT;
+        if (sceneRayQuery.traceRay(centerRay, centerHit, centerHitT, VBufferRT::kRayFlags, 0xff, false))
+        {
+            gVBufferCenter[pixel] = centerHit.getData();
+            gMotionVector[pixel] = gVBufferRT.computeCenterMotionVector(centerHit, centerRay);
+        }
+        else
+        {
+            gVBufferCenter[pixel] = {};
+            gMotionVector[pixel] = {};
+        }
+    }
+    else
+    {
+        // No jittering AND No subpixel random -> no need to trace new center ray
+        if (hit.isValid())
+        {
+            gVBufferCenter[pixel] = hit.getData();
+            gMotionVector[pixel] = gVBufferRT.computeCenterMotionVector(hit, ray);
+        }
+        else
+        {
+            gVBufferCenter[pixel] = {};
+            gMotionVector[pixel] = {};
+        }
+    }
+
+    // Write SVGF inputs data if enabled
+    gVBufferRT.writeSVGFData(pixel, centerRay, centerHit);
+
+    if (gVBufferRT.clampMotionVec)
+    {
+        float2 screenMotion = gMotionVector[pixel] * float2(gVBufferRT.frameDim);
+        gMotionVector[pixel].x = abs(screenMotion.x) <= gVBufferRT.mvecClampThreshold ? 0.0f : gMotionVector[pixel].x;
+        gMotionVector[pixel].y = abs(screenMotion.y) <= gVBufferRT.mvecClampThreshold ? 0.0f : gMotionVector[pixel].y;
+    }
 
     gVBufferRT.endTime(pixel, timer);
 }

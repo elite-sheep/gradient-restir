@@ -338,7 +338,7 @@ namespace Falcor
 
             mSceneStats.emissiveMemoryInBytes = mpLightCollection->getMemoryUsageInBytes();
         }
-        
+
         return mpLightCollection;
     }
 
@@ -3718,12 +3718,12 @@ namespace Falcor
 
     void Scene::invalidateTlasCache()
     {
-        mFrameIndex = 1 - mFrameIndex; 
+        mFrameIndex = 1 - mFrameIndex;
         for (uint32_t rtc : mTlasRayTypeCounts)
         {
             // current frame caches: 2*rtc1-fi, 2*rtc2-fi, 2*rtc3-fi, ...
             // prev frame caches: 2*rtc1-1+fi, 2*rtc2-1+fi, 2*rtc3-1+fi, ...
-            mTlasCache[2 * rtc - mFrameIndex].pTlasObject = nullptr; 
+            mTlasCache[2 * rtc - mFrameIndex].pTlasObject = nullptr;
         }
         //for (auto& tlas : mTlasCache)
         //{
@@ -3968,16 +3968,16 @@ namespace Falcor
 
     bool Scene::onMouseEvent(const MouseEvent& mouseEvent)
     {
-        if (mCameraControlsEnabled)
-        {
-            // DEMO21, but I think it makes sense, if the camera did anything, stop the animation for it.
-            if (mpCamCtrl->onMouseEvent(mouseEvent))
-            {
-                auto& camera = mCameras[mSelectedCamera];
-                camera->setIsAnimated(false);
-                return true;
-            }
-        }
+        // if (mCameraControlsEnabled)
+        // {
+        //     // DEMO21, but I think it makes sense, if the camera did anything, stop the animation for it.
+        //     if (mpCamCtrl->onMouseEvent(mouseEvent))
+        //     {
+        //         auto& camera = mCameras[mSelectedCamera];
+        //         camera->setIsAnimated(false);
+        //         return true;
+        //     }
+        // }
 
         return false;
     }

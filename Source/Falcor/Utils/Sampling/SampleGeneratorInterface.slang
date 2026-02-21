@@ -32,7 +32,9 @@
 interface ISampleGenerator
 {
     /** Returns the next sample value. This function updates the state.
-    */
+     */
+    uint getCount();
+    [mutating] void setCount(uint newValue);
     [mutating] uint next();
     [mutating] float sampleNext1D();
     [mutating] void mutate(float3 samplesForMutation);

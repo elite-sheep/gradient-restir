@@ -68,13 +68,29 @@ public struct UniformSampleGenerator : ISampleGenerator
 
         // Create xoshiro128** pseudorandom generator.
         this.rng = createXoshiro128StarStar(seed);
+        this.sampleCount = 0u;
+    }
+
+    uint getCount()
+    {
+        return this.sampleCount;
+    }
+
+    [mutating]
+    void setCount(uint newValue)
+    {
+        this.sampleCount = newValue;
     }
 
     /**
      * Returns the next sample value. This function updates the state.
      */
     [mutating]
-    uint next() { return nextRandom(rng); }
+    uint next()
+    {
+        ++sampleCount;
+        return nextRandom(rng);
+    }
 
     [mutating] void mutate(float3 samplesForMutation)
     {
@@ -86,5 +102,6 @@ public struct UniformSampleGenerator : ISampleGenerator
         return (bits >> 8) * 0x1p-24;
     }
 
+    uint sampleCount;
     Xoshiro128StarStar rng;
 };

@@ -192,7 +192,7 @@ bool generateEmissiveSample(
         return false;
 
     TriangleLightSample tls;
-    if (!emissiveSampler.sampleLight(isect.posW, isect.normalW, upperHemisphere, sg, tls))
+    if (!emissiveSampler.sampleLight(isect.posW, isect.normalW, upperHemisphere, sg, tls, false))
         return false;
 
     // Setup returned sample.

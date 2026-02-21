@@ -206,7 +206,7 @@ namespace Falcor
     SceneBuilder::SceneBuilder(ref<Device> pDevice, const Settings& settings, Flags flags)
         : mpDevice(pDevice)
         , mSettings(settings)
-        , mFlags(flags)
+        , mFlags(flags | Flags::UseCompressedHitInfo)
     {
         mSceneData.pMaterials = std::make_unique<MaterialSystem>(mpDevice);
     }
@@ -372,7 +372,8 @@ namespace Falcor
         // Adjust instance indices of SDF grid instances.
         for (auto& sdfInstanceData : mSceneData.sdfGridInstances) sdfInstanceData.instanceIndex = tlasInstanceIndex++;
 
-        mSceneData.useCompressedHitInfo = is_set(mFlags, Flags::UseCompressedHitInfo);
+        mSceneData.useCompressedHitInfo = true;
+        // mSceneData.useCompressedHitInfo = is_set(mFlags, Flags::UseCompressedHitInfo);
 
         // Write scene cache if requested.
         if (mWriteSceneCache)

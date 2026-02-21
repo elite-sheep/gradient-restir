@@ -355,12 +355,12 @@ bool traceSceneVisibilityRay<let UseAlphaTest : int>(const Ray ray, uint rayFlag
 */
 struct SceneRayQuery<let UseAlphaTest : int> : ISceneRayQuery
 {
-    bool traceRay(const Ray ray, out HitInfo hit, out float hitT, uint rayFlags, uint instanceInclusionMask, bool isPrevFrame)
+    bool traceRay(const Ray ray, out HitInfo hit, out float hitT, uint rayFlags, uint instanceInclusionMask, bool isPrevFrame=false)
     {
         return traceSceneRay<UseAlphaTest>(ray, hit, hitT, rayFlags, instanceInclusionMask, isPrevFrame);
     }
 
-    bool traceVisibilityRay(const Ray ray, uint rayFlags, uint instanceInclusionMask, bool isPrevFrame)
+    bool traceVisibilityRay(const Ray ray, uint rayFlags, uint instanceInclusionMask, bool isPrevFrame=false)
     {
         return traceSceneVisibilityRay<UseAlphaTest>(ray, rayFlags, instanceInclusionMask, isPrevFrame);
     }

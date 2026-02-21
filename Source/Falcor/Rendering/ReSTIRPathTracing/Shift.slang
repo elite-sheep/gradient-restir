@@ -11,7 +11,7 @@
 __exported import PathReservoir;
 __exported import ReSTIRPT;
 import Scene.ShadingData;
-import LoadShadingData; 
+import LoadShadingData;
 import PathTracer;
 import Utils.Sampling.TinyUniformSampleGenerator;
 import Scene.RaytracingInline;
@@ -50,12 +50,12 @@ bool shiftAndMergeReservoir(const ReSTIRPT restirpt, const ReSTIRPathTracerParam
 
 // this function doesn't overwrite external srcReservoir
 float3 computeShiftedIntegrand(
-    const ReSTIRPT restirpt, const ReSTIRPathTracerParams params, inout float Jacobian, 
+    const ReSTIRPT restirpt, const ReSTIRPathTracerParams params, inout float Jacobian,
     PathReservoir srcReservoir, ReconnectionData rcData, int dstPrefixLength, bool isPrevFrame = false, bool temporalUpdateForDynamicScene = false)
 {
     float3 res = shiftPath(restirpt, false, params, Jacobian,
                            srcReservoir, rcData, dstPrefixLength, isPrevFrame, temporalUpdateForDynamicScene);
-    return res;                     
+    return res;
 }
 
 float3 shiftPath(const ReSTIRPT restirpt, bool isSuffixPass, const ReSTIRPathTracerParams params, inout float Jacobian,
@@ -92,7 +92,7 @@ float3 shiftPath(const ReSTIRPT restirpt, bool isSuffixPass, const ReSTIRPathTra
             if (all(srcReservoir.rcIrrad == 0.f)) return 0.f;
         }
         thp *= shiftPathReconnection(restirpt, isSuffixPass, params, reconnectionJacobian, dstRcPrevSd, srcReservoir, isPrevFrame);
-        
+
         Jacobian *= reconnectionJacobian;
     }
 
@@ -101,10 +101,11 @@ float3 shiftPath(const ReSTIRPT restirpt, bool isSuffixPass, const ReSTIRPathTra
 
 // dstPdf * Jacobian transforms pdf in dst space to src space
 // srcPdf / Jacobian transforms pdf in src space to dst space
-float3 shiftPathReconnection(const ReSTIRPT restirpt, bool isSuffixPass, const ReSTIRPathTracerParams params, inout float Jacobian,
-
+float3 shiftPathReconnection(const ReSTIRPT restirpt,
+                            bool isSuffixPass,
+                            const ReSTIRPathTracerParams params,
+                            inout float Jacobian,
                              ShadingData dstPrimarySd,
-
                              inout PathReservoir srcReservoir, bool isPrevFrame) // for updating vertex buffer
 {
     var sg = TinyUniformSampleGenerator(1);
@@ -113,9 +114,9 @@ float3 shiftPathReconnection(const ReSTIRPT restirpt, bool isSuffixPass, const R
     const int rcVertexLength = srcReservoir.pathFlags.rcVertexLength();
     const int prefixLength = srcReservoir.pathFlags.prefixLength();
 
-    
+
     const HitInfo rcVertexHit = srcReservoir.rcHit;
-    
+
     const float3 rcVertexIrradiance = srcReservoir.rcIrrad;
     const float3 rcVertexWi = srcReservoir.rcWi;
     const bool rcVertexHitExists = rcVertexHit.isValid();
@@ -157,7 +158,7 @@ float3 shiftPathReconnection(const ReSTIRPT restirpt, bool isSuffixPass, const R
     shifted_dist2 = dot(shiftedDisp, shiftedDisp);
 
     // check if the shift violates roughness/distance condition
-    bool violateRoughnessCondition = rcVertexLength == (isSuffixPass ? prefixLength : 0) + 1 && !(componentType1 >= 2 ? dstMI.getProperties(dstPrimarySd).roughness > restirpt.settings.specularRoughnessThreshold : 
+    bool violateRoughnessCondition = rcVertexLength == (isSuffixPass ? prefixLength : 0) + 1 && !(componentType1 >= 2 ? dstMI.getProperties(dstPrimarySd).roughness > restirpt.settings.specularRoughnessThreshold :
                              (dstMI.getLobeTypes(dstPrimarySd) & (uint)LobeType::Diffuse) != 0);
 
     bool violateDistanceCondition = rcVertexHitExists && shifted_dist2 <= restirpt.settings.nearFieldDistanceThreshold * restirpt.sceneRadius * restirpt.settings.nearFieldDistanceThreshold * restirpt.sceneRadius;
@@ -189,7 +190,7 @@ float3 shiftPathReconnection(const ReSTIRPT restirpt, bool isSuffixPass, const R
 
     dstIntegrand *= uint(!rcVertexHitExists || !isRcVertexEmissive || rcFrontFacing);
 
-    float MISForEmissive = !kUseMIS ? 1.f : PathTracer::evalMIS(1, isLightPathNEE ? lightPDF1 : dstPDF1ForMIS, 1, isLightPathNEE ? dstPDF1ForMIS : lightPDF1);    
+    float MISForEmissive = !kUseMIS ? 1.f : PathTracer::evalMIS(1, isLightPathNEE ? lightPDF1 : dstPDF1ForMIS, 1, isLightPathNEE ? dstPDF1ForMIS : lightPDF1);
     dstIntegrand *= isRcVertexEmissive ? MISForEmissive : 1.f;
 
     const bool needSecondPart = rcVertexHitExists && !isRcVertexEmissive;
@@ -199,7 +200,7 @@ float3 shiftPathReconnection(const ReSTIRPT restirpt, bool isSuffixPass, const R
 
     float3 dstF2 = rcMI.evalBsdfAndPdf(rcVertexSd, rcVertexWi, sg, isRcVertexNEE ? 0xf : 1 << componentType2, dstPDF2BSDF, dstPDF2ForMIS);
 
-    float MISForLightVertex = (kUseMIS && isRcVertexConnectedtoLight && srcReservoir.pathFlags.lightType() != (uint)PathTracer::LightType::Analytic) ? 
+    float MISForLightVertex = (kUseMIS && isRcVertexConnectedtoLight && srcReservoir.pathFlags.lightType() != (uint)PathTracer::LightType::Analytic) ?
     PathTracer::evalMIS(1, isRcVertexNEE ? srcReservoir.lightPdf : dstPDF2ForMIS, 1, isRcVertexNEE ? dstPDF2ForMIS : srcReservoir.lightPdf) : 1;
 
     float dstPDF2 = isRcVertexNEE ? srcReservoir.lightPdf : dstPDF2BSDF;
@@ -234,6 +235,6 @@ bool evalSegmentVisibility(bool isPrevFrame, const float3 sourceVertex, const fl
     Ray ray = { sourceVertex, 0.f, dir, tMax }; // TODO: use offset position instead
 
     SceneRayQuery<kUseAlphaTest> sceneRayQuery;
-    logTraceRay(PixelStatsRayType::Visibility);    
+    logTraceRay(PixelStatsRayType::Visibility);
     return sceneRayQuery.traceVisibilityRay(ray, RAY_FLAG_NONE, 0xff, isPrevFrame);
 }

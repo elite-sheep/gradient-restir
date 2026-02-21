@@ -64,11 +64,11 @@ namespace Falcor
         struct Options
         {
             // Common Options for ReSTIR DI and GI.
- 
+
             // Temporal resampling options.
             bool useTemporalResampling = true;          ///< Enable temporal resampling.
             bool temporalUpdateForDynamicScene = false;
-            uint32_t maxHistoryLength = 20;             ///< Maximum temporal history length.
+            uint32_t maxHistoryLength = 32;             ///< Maximum temporal history length.
 
             // TODO: MIS option
 
@@ -79,8 +79,8 @@ namespace Falcor
 
             bool useSpatialResampling = true;           ///< Enable spatial resampling.
             uint32_t spatialIterations = 1;             ///< Number of spatial resampling iterations.
-            uint32_t spatialNeighborCount = 3;          ///< Number of neighbor samples to resample per pixel and iteration.
-            uint32_t spatialGatherRadius = 30;          ///< Radius to gather samples from.
+            uint32_t spatialNeighborCount = 2;          ///< Number of neighbor samples to resample per pixel and iteration.
+            uint32_t spatialGatherRadius = 32;          ///< Radius to gather samples from.
 
             // TODO: MIS option
 
@@ -309,7 +309,7 @@ namespace Falcor
         ref<Buffer> mpPrefixThroughputs;
         ref<Buffer> mpPrevReservoirs;                 ///< Buffer containing the previous reservoirs.
         ref<Buffer> mpPrevSuffixReservoirs;           ///< Buffer containing previous suffix reservoirs.
-        ref<Buffer> mpTemporalNeighborPixels;   
+        ref<Buffer> mpTemporalNeighborPixels;
 
         // TODO: fix this for directlyOutputColor
         ref<Buffer> mpTempReservoirs;                 ///< can hold both initial sampling results and firefly path reserovirs

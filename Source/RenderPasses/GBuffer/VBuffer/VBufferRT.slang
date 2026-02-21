@@ -30,19 +30,47 @@ __exported import Utils.Timing.GpuTimer;
 __exported import Utils.Math.Ray;
 import Utils.Math.MathHelpers;
 import Utils.Sampling.SampleGenerator;
+import Utils.Debug.PixelDebug;
+import LoadShadingData;
 
 RWTexture2D<PackedHitInfo> gVBuffer;
-RWTexture2D<float> gDepth;
+RWTexture2D<PackedHitInfo> gVBufferCenter;
+RWTexture2D<float>  gDepth;
+RWTexture2D<float4>  gLinearDepth;
 RWTexture2D<float2> gMotionVector;
 RWTexture2D<float4> gViewW;
 RWTexture2D<uint> gTime;
 RWTexture2D<float> gMask;
+RWTexture2D<float2> gSubPixelUV;
+RWTexture2D<float2> gLensUV;
+RWTexture2D<float2> gDebugMotion;
+
+// Addtional outputs for SVGF
+RWTexture2D<float4> gPosW;
+RWTexture2D<float4> gNormW;
+RWTexture2D<float4> gAlbedo;
+RWTexture2D<float2> gLinearZ;
+RWTexture2D<float4> gEmissive;
+RWTexture2D<float2> gPosNormalFwidth;
 
 #define is_valid(name) (is_valid_##name != 0)
 
 #if !defined(COMPUTE_DEPTH_OF_FIELD) || !defined(USE_ALPHA_TEST) || !defined(RAY_FLAGS)
 #error "Not all defines are set!"
 #endif
+
+void print4x4(float4x4 mat, String msg)
+{
+    for (uint i = 0; i < 4; i++)
+    {
+        print(msg, mat[i]);
+    }
+}
+
+float persProjToView(float depthNDC, float near, float far)
+{
+    return (near * far) / (depthNDC * (far - near) - far);
+}
 
 struct VBufferRT
 {
@@ -51,106 +79,199 @@ struct VBufferRT
     static const uint kRayFlags = RAY_FLAGS;
 
     uint2 frameDim;
+    float2 invFrameDim;
     uint frameCount;
+    uint subPixelRandom;
+    float areaScaler;
+    bool isSceneAnimated; // TODO: need to find a way to check if the global timer is paused
+    bool clampMotionVec;
+    float mvecClampThreshold;
+    bool sameSubpixelRandomForAllPixels;
+    bool useSVGF;
+
+    float2 computeCenterMotionVector(const HitInfo centerHit, const Ray centerRay)
+    {
+        VertexData prevVertexData = loadVertexData(centerHit, centerRay.origin, centerRay.dir, true);
+        VertexData currVertexData = loadVertexData(centerHit, centerRay.origin, centerRay.dir, false);
+        float4 prevPosH = mul(gScene.camera.data.prevViewProjMatNoJitter, float4(prevVertexData.posW, 1.f));
+        float4 currPosH = mul(gScene.camera.data.viewProjMatNoJitter, float4(currVertexData.posW, 1.0f));
+        float4 currPosNdc = currPosH / currPosH.w;
+        float2 currPosScreen = currPosNdc.xy * float2(0.5f, -0.5f) + 0.5f;
+        float4 prevPosNdc = prevPosH / prevPosH.w;
+        float2 prevPosScreen = prevPosNdc.xy * float2(0.5f, -0.5f) + 0.5f;
+        float2 newMotionVector = prevPosScreen - currPosScreen;
+
+        print("prevPosScreen = ", prevPosScreen);
+        print("currPosScreen = ", currPosScreen);
+
+        return newMotionVector;
+    }
 
     Ray generateRay(uint2 pixel)
     {
-        if (kComputeDepthOfField)
+        float2 jitterOnScreen = float2(-gScene.camera.data.jitterX, gScene.camera.data.jitterY) * frameDim; // [-0.5, 0.5]
+
+        // No anti-aliasling
+        if (subPixelRandom == 0 && all(jitterOnScreen == float2(0)))
         {
-            SampleGenerator sg = SampleGenerator(pixel, frameCount);
-            return gScene.camera.computeRayThinlens(pixel, frameDim, sampleNext2D(sg));
+            gSubPixelUV[pixel] = float2(0.5f);
+
+            if (kComputeDepthOfField)
+            {
+                SampleGenerator sg = SampleGenerator(pixel, frameCount);
+                float2 lensUV = sampleNext2D(sg);
+                gLensUV[pixel] = lensUV;
+                return gScene.camera.computeRayThinlens(pixel, frameDim, lensUV);
+            }
+            else
+            {
+                gLensUV[pixel] = float2(0);
+                return gScene.camera.computeRayPinhole(pixel, frameDim);
+            }
         }
+        // Has anti-aliasing
         else
         {
-            return gScene.camera.computeRayPinhole(pixel, frameDim);
+            // Compute subpixel UV in [0, 1)
+            SampleGenerator sg = SampleGenerator(pixel, frameCount);
+            SampleGenerator sgFixedPixel = SampleGenerator(uint2(1), frameCount);
+            SampleGenerator sgForSubpixelUV = sameSubpixelRandomForAllPixels ? sgFixedPixel : sg;
+            float2 subPixelUV = subPixelRandom != 0 ? sampleNext2D(sgForSubpixelUV) : float2(0.5f);
+            subPixelUV += any(jitterOnScreen != 0) ? jitterOnScreen + 0.5f : float2(0);
+            subPixelUV = float2(0.5f) + areaScaler * (subPixelUV - 0.5f);
+            gSubPixelUV[pixel] = subPixelUV;
+
+            if (kComputeDepthOfField)
+            {
+                float2 lensUV = sampleNext2D(sg);
+                gLensUV[pixel] = lensUV;
+                return gScene.camera.computeRayThinlensSubPixelRandom(pixel, frameDim, subPixelUV, lensUV);
+            }
+            else
+            {
+                gLensUV[pixel] = float2(0);
+                return gScene.camera.computeRayPinholeSubPixelRandom(pixel, frameDim, subPixelUV);
+            }
         }
+    }
+
+    VertexData loadVertexData(const HitInfo hit, float3 rayOrigin, float3 rayDir, bool isPrevFrame)
+    {
+        VertexData v = {};
+        // Get previous world position for current hit for computing motion vector
+        if (hit.getType() == HitType::Triangle)
+        {
+            const TriangleHit triangleHit = hit.getTriangleHit();
+            v = gScene.getVertexData(triangleHit, isPrevFrame);
+        }
+        else if (hit.getType() == HitType::DisplacedTriangle)
+        {
+            const DisplacedTriangleHit displacedTriangleHit = hit.getDisplacedTriangleHit();
+            v = gScene.getVertexData(displacedTriangleHit, -rayDir, isPrevFrame);
+        }
+        else if (hit.getType() == HitType::Curve)
+        {
+            const CurveHit curveHit = hit.getCurveHit();
+            v = gScene.getVertexDataFromCurve(curveHit, isPrevFrame);
+        }
+        else if (hit.getType() == HitType::SDFGrid)
+        {
+            const SDFGridHit sdfGridHit = hit.getSDFGridHit();
+            v = gScene.getVertexDataFromSDFGrid(sdfGridHit, rayOrigin, rayDir);
+        }
+
+        return v;
     }
 
     void writeHit(uint2 pixel, float3 rayOrigin, float3 rayDir, const HitInfo hit)
     {
         gVBuffer[pixel] = hit.getData();
 
-        VertexData v;
+        VertexData v = loadVertexData(hit, rayOrigin, rayDir, false);
         float depth = 1.f;
-        float3 prevPosW = float3(0.f);
-        float2 motionVector = float2(0.f);
 
-        if (hit.getType() == HitType::Triangle)
-        {
-            const TriangleHit triangleHit = hit.getTriangleHit();
-            v = gScene.getVertexData(triangleHit);
-            prevPosW = gScene.getPrevPosW(triangleHit);
-        }
-        else if (hit.getType() == HitType::DisplacedTriangle)
-        {
-            const DisplacedTriangleHit displacedTriangleHit = hit.getDisplacedTriangleHit();
-            v = gScene.getVertexData(displacedTriangleHit, -rayDir);
-            prevPosW = gScene.getPrevPosW(displacedTriangleHit);
-        }
-        else if (hit.getType() == HitType::Curve)
-        {
-            const CurveHit curveHit = hit.getCurveHit();
-            v = gScene.getVertexDataFromCurve(curveHit);
-            prevPosW = gScene.getPrevPosWFromCurve(curveHit);
-        }
-        else if (hit.getType() == HitType::SDFGrid)
-        {
-            const SDFGridHit sdfGridHit = hit.getSDFGridHit();
-            v = gScene.getVertexDataFromSDFGrid(sdfGridHit, rayOrigin, rayDir);
-
-            prevPosW = gScene.getPrevPosWFromSDFGrid(sdfGridHit, v.posW);
-        }
-
-        if (hit.getType() == HitType::Triangle || hit.getType() == HitType::DisplacedTriangle || hit.getType() == HitType::Curve ||
-            hit.getType() == HitType::SDFGrid)
+        // Compte depth and motion vector
+        if (hit.getType() == HitType::Triangle || hit.getType() == HitType::DisplacedTriangle || hit.getType() == HitType::Curve || hit.getType() == HitType::SDFGrid)
         {
             // Compute depth similar to raster (NDC).
             float4 curPosH = mul(gScene.camera.data.viewProjMatNoJitter, float4(v.posW, 1.f));
             depth = curPosH.z / curPosH.w;
-
-            // Compute motion vector.
-            float2 pixelPos = pixel + float2(0.5f, 0.5f);
-            float4 prevPosH = mul(gScene.camera.data.prevViewProjMatNoJitter, float4(prevPosW, 1.f));
-            // Remove camera jitter from motion vector
-            motionVector = calcMotionVector(pixelPos, prevPosH, frameDim) + float2(gScene.camera.data.jitterX, -gScene.camera.data.jitterY);
         }
 
-        if (is_valid(gDepth))
-            gDepth[pixel] = depth;
-        if (is_valid(gMotionVector))
-            gMotionVector[pixel] = motionVector;
-        if (is_valid(gMask))
-            gMask[pixel] = 1.0f;
+        if (is_valid(gDepth)) gDepth[pixel] = depth;
+        if (is_valid(gLinearDepth)) gLinearDepth[pixel] = float4(float3(abs(persProjToView(depth, gScene.camera.data.nearZ, gScene.camera.data.farZ)) / 30), 1.0f);
+        if (is_valid(gMask)) gMask[pixel] = 1.0f;
     }
 
     void writeMiss(uint2 pixel, float3 rayOrigin, float3 rayDir)
     {
         gVBuffer[pixel] = {};
 
-        if (is_valid(gDepth))
-            gDepth[pixel] = 1.f;
-        if (is_valid(gMotionVector))
-            gMotionVector[pixel] = {};
-        if (is_valid(gMask))
-            gMask[pixel] = 0.0f;
+        if (is_valid(gDepth)) gDepth[pixel] = 1.f;
+        if (is_valid(gDepth)) gLinearDepth[pixel] = float4(1, 1, 1, 0);
+        if (is_valid(gMask)) gMask[pixel] = 0.0f;
     }
 
     void writeAux(uint2 pixel, const Ray ray)
     {
         // Write view direction.
-        if (is_valid(gViewW))
-            gViewW[pixel] = float4(-ray.dir, 0.f);
+        if (is_valid(gViewW)) gViewW[pixel] = float4(-ray.dir, 0.f);
+    }
+
+    void writeSVGFData(uint2 pixel, const Ray centerRay, const HitInfo centerHit)
+    {
+        if (!useSVGF) return;
+
+        // Compute additional outputs for SVGF
+        uint materialID = gScene.getMaterialID(centerHit.getInstanceID());
+        let lod = ExplicitLodTextureSampler(0.f);
+        ShadingData sd = loadShadingData(centerHit, centerRay.origin, centerRay.dir, lod);
+        uint hints = getMaterialInstanceHints(centerHit, true);
+        let mi = gScene.materials.getMaterialInstance(sd, lod, hints);
+        let bsdfProperties = mi.getProperties(sd);
+
+        if (is_valid(gPosW))
+        {
+            gPosW[pixel] = float4(sd.posW, 1.f);
+        }
+        if (is_valid(gNormW))
+            gNormW[pixel] = float4(sd.frame.N, 0.f);
+        if (is_valid(gEmissive))
+            gEmissive[pixel] = float4(bsdfProperties.emission, 0.f);
+        if (is_valid(gAlbedo))
+            gAlbedo[pixel] = float4( (bsdfProperties.diffuseReflectionAlbedo + bsdfProperties.diffuseTransmissionAlbedo + bsdfProperties.specularReflectionAlbedo + bsdfProperties.specularTransmissionAlbedo), 1.0f );
+
+#if !COMPUTE_DERIVATIVE_MAUALLY
+        if (is_valid(gLinearZ))
+        {
+            float4 curPosH = mul(gScene.camera.data.viewProjMatNoJitter, float4(sd.posW, 1.f));
+            float curLinearZ = curPosH.w;
+            float3 ddxPosW = ddx(sd.posW);
+            float3 ddyPosW = ddy(sd.posW);
+            float4 curPosH_dx = mul(gScene.camera.data.viewProjMatNoJitter, float4(sd.posW + ddxPosW, 1.f));
+            float4 curPosH_dy = mul(gScene.camera.data.viewProjMatNoJitter, float4(sd.posW + ddxPosW, 1.f));
+            float ddxLinearZ = abs(curPosH_dx.w - curLinearZ);
+            float ddyLinearZ = abs(curPosH_dy.w - curLinearZ);
+            float dLinearZ = max(ddxLinearZ, ddyLinearZ);
+            gLinearZ[pixel] = float2(curLinearZ, dLinearZ);
+        }
+
+        if (is_valid(gPosNormalFwidth))
+        {
+            gPosNormalFwidth[pixel] = float2(length(fwidth(sd.posW)), length(fwidth(bsdfProperties.guideNormal)));
+        }
+#else
+#endif
+
     }
 
     void beginTime(inout GpuTimer timer)
     {
-        if (is_valid(gTime))
-            timer.start();
+        if (is_valid(gTime)) timer.start();
     }
 
     void endTime(uint2 pixel, inout GpuTimer timer)
     {
-        if (is_valid(gTime))
-            gTime[pixel] = timer.getElapsed();
+        if (is_valid(gTime)) gTime[pixel] = timer.getElapsed();
     }
 };

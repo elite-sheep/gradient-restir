@@ -1,0 +1,7 @@
+// Copyright @yucwang 2024
+
+#pragma once
+
+#include "Utils/HostDeviceShared.slangh"
+
+#define DIFF_INTEGRATOR_MULTI_POINT_RESTIR 1

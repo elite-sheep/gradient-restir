@@ -103,7 +103,7 @@ struct TemporalPathRetrace
         float dummy;
         float3 thp = TraceReplayedPath(primaryHit,
 
-                                       primarySd, 
+                                       primarySd,
 
                                        reservoir.pathFlags,
                                        reservoir.initRandomSeed, reservoir.suffixInitRandomSeed, rcPrevHit, rcPrevWo, neighborId % 2 == 0, dummy);
@@ -126,6 +126,7 @@ struct TemporalPathRetrace
         if (!centralPrimaryHit.isValid()) return false;
 
         float2 motionVector = motionVectors[pixel];
+        print("motion vector:", motionVector);
         int2 prevPixel = pixel;
         if (gEnableTemporalReprojection)
         {
@@ -153,7 +154,7 @@ struct TemporalPathRetrace
                 float dummy;
                 thp = TraceReplayedPath(temporalPrimaryHit,
 
-                                        temporalPrimarySd, 
+                                        temporalPrimarySd,
 
                                         centralReservoir.pathFlags,
                                         centralReservoir.initRandomSeed, centralReservoir.suffixInitRandomSeed, rcPrevHit, rcPrevWo, true, dummy);

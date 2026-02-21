@@ -45,17 +45,19 @@ extern "C" FALCOR_API_EXPORT void registerPlugin(Falcor::PluginRegistry& registr
 
 namespace
 {
-// Scripting options.
-const char kOutputSize[] = "outputSize";
-const char kFixedOutputSize[] = "fixedOutputSize";
-const char kSamplePattern[] = "samplePattern";
-const char kSampleCount[] = "sampleCount";
-const char kUseAlphaTest[] = "useAlphaTest";
-const char kDisableAlphaTest[] = "disableAlphaTest"; ///< Deprecated for "useAlphaTest".
-const char kAdjustShadingNormals[] = "adjustShadingNormals";
-const char kForceCullMode[] = "forceCullMode";
-const char kCullMode[] = "cull";
-} // namespace
+    // Scripting options.
+    const char kOutputSize[] = "outputSize";
+    const char kFixedOutputSize[] = "fixedOutputSize";
+    const char kSamplePattern[] = "samplePattern";
+    const char kSampleCount[] = "sampleCount";
+    const char kUseAlphaTest[] = "useAlphaTest";
+    const char kDisableAlphaTest[] = "disableAlphaTest"; ///< Deprecated for "useAlphaTest".
+    const char kAdjustShadingNormals[] = "adjustShadingNormals";
+    const char kForceCullMode[] = "forceCullMode";
+    const char kCullMode[] = "cull";
+    const char kSubPixelRandom[] = "subPixelRandom";
+    const char kSameSubpixelRandomForAllPixels[] = "sameSubpixelRandomForAllPixels";
+}
 
 void GBufferBase::parseProperties(const Properties& props)
 {
@@ -77,6 +79,9 @@ void GBufferBase::parseProperties(const Properties& props)
             mForceCullMode = value;
         else if (key == kCullMode)
             mCullMode = value;
+        else if (key == kSubPixelRandom)
+            mSubPixelRandom = value;
+        else if (key == kSameSubpixelRandomForAllPixels) mSameSubpixelRandomForAllPixels = value;
         // TODO: Check for unparsed fields, including those parsed in derived classes.
     }
 
@@ -113,7 +118,7 @@ void GBufferBase::renderUI(Gui::Widgets& widget)
     }
 
     // Sample pattern controls.
-    bool updatePattern = widget.dropdown("Sample pattern", mSamplePattern);
+    bool updatePattern = widget.dropdown("Sample pattern (jitter offset)", mSamplePattern);
     widget.tooltip(
         "Selects sample pattern for anti-aliasing over multiple frames.\n\n"
         "The camera jitter is set at the start of each frame based on the chosen pattern.\n"
@@ -131,6 +136,15 @@ void GBufferBase::renderUI(Gui::Widgets& widget)
         updateSamplePattern();
         mOptionsChanged = true;
     }
+
+    // Subpixel random control
+    if (widget.dropdown("Sub-pixel Random", mSubPixelRandom))
+    {
+        mOptionsChanged = true;
+        //requestRecompile();
+    }
+    widget.tooltip("Enable this will cause sample inside pixel to vary on each pixel in each frame, instead of all use the pixel-center.\n"
+        "This is to achieve anti-aliasing.", true);
 
     // Misc controls.
     mOptionsChanged |= widget.checkbox("Alpha Test", mUseAlphaTest);
@@ -156,10 +170,32 @@ void GBufferBase::renderUI(Gui::Widgets& widget)
             mOptionsChanged = true;
         }
     }
+
+    // Clamp near zero motion vector due to precision error
+    mOptionsChanged |= widget.checkbox("Clamp Motion Vector", mClampMotionVector);
+    widget.tooltip("This is to clamp very tiny motion due to precision error. If integear motion is used, we don't need to care about this.\n"
+        "But if float motion is used, this would cause some part of the scene be biased under static camera/scene", true);
+    if (mClampMotionVector)
+    {
+        mOptionsChanged |= widget.var("Clamp Threshold", mMotionVecThreshold, 0.0f, 10000.0f);
+        widget.tooltip("All motion below this value will be clamped to 0. This value is defined in screen space", true);
+    }
+
+    mOptionsChanged |= widget.var("Sub-pixel random area scaler", mAreaScaler, 0.0f, 16.0f);
+    widget.tooltip("This is to control how large our square random area will be from the pixel-center", true);
+
+    mOptionsChanged |= widget.var("Gaussian filter alpha", mFilterAlpha, 0.0f, 10.0f);
+
+    mOptionsChanged |= widget.checkbox("Use Gaussian Filter", mUseGaussianFilter);
+    mOptionsChanged |= widget.checkbox("Same subpixel locations for all pixels", mSameSubpixelRandomForAllPixels);
 }
 
 void GBufferBase::execute(RenderContext* pRenderContext, const RenderData& renderData)
 {
+    // Udpdate anti-aliasing options
+    mSubPixelRandom = mSamplePattern != SamplePattern::Center ? SubPixelRandom::None : mSubPixelRandom; // disable subpixel random if has jittering
+    mSamplePattern = mSubPixelRandom != SubPixelRandom::None ? SamplePattern::Center : mSamplePattern; // disable jittering if has subpixel random
+
     // Update refresh flag if options that affect the output have changed.
     auto& dict = renderData.getDictionary();
     if (mOptionsChanged)
@@ -172,6 +208,12 @@ void GBufferBase::execute(RenderContext* pRenderContext, const RenderData& rende
     // Pass flag for adjust shading normals to subsequent passes via the dictionary.
     // Adjusted shading normals cannot be passed via the VBuffer, so this flag allows consuming passes to compute them when enabled.
     dict[Falcor::kRenderPassGBufferAdjustShadingNormals] = mAdjustShadingNormals;
+
+    // Expose the subpixel sample option to other pass
+    renderData.getDictionary()[Falcor::kRenderPassSubPixelRandom] = mSubPixelRandom;
+
+    // Update random seed
+    mFrameCount = mUseFixedSeed ? mFixedSeed : mFrameCount;
 }
 
 void GBufferBase::setScene(RenderContext* pRenderContext, const ref<Scene>& pScene)

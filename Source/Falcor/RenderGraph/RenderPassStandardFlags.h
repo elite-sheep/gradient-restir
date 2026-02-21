@@ -58,5 +58,7 @@ static const char kRenderPassPRNGDimension[] = "_prngDimension";
  */
 static const char kRenderPassGBufferAdjustShadingNormals[] = "_gbufferAdjustShadingNormals";
 
+static const char kRenderPassSubPixelRandom[] = "_vbufferSubPixelRandom";
+
 FALCOR_ENUM_CLASS_OPERATORS(RenderPassRefreshFlags);
 } // namespace Falcor

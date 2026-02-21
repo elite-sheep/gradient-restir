@@ -28,16 +28,17 @@
 #pragma once
 #include "../GBufferBase.h"
 #include "Utils/Sampling/SampleGenerator.h"
+#include "Utils/Debug/PixelDebug.h"
+#include "RenderGraph/RenderPassStandardFlags.h"
 
 using namespace Falcor;
 
-/**
- * Ray traced V-buffer pass.
- *
- * This pass renders a visibility buffer using ray tracing.
- * The visibility buffer encodes the mesh instance ID and primitive index,
- * as well as the barycentrics at the hit point.
- */
+/** Ray traced V-buffer pass.
+
+    This pass renders a visibility buffer using ray tracing.
+    The visibility buffer encodes the mesh instance ID and primitive index,
+    as well as the barycentrics at the hit point.
+*/
 class VBufferRT : public GBufferBase
 {
 public:
@@ -50,6 +51,7 @@ public:
     RenderPassReflection reflect(const CompileData& compileData) override;
     void execute(RenderContext* pRenderContext, const RenderData& renderData) override;
     void renderUI(Gui::Widgets& widget) override;
+    virtual bool onMouseEvent(const MouseEvent& mouseEvent) { return mpPixelDebug->onMouseEvent(mouseEvent); }
     Properties getProperties() const override;
     void setScene(RenderContext* pRenderContext, const ref<Scene>& pScene) override;
 
@@ -64,16 +66,14 @@ private:
     void recreatePrograms();
 
     // Internal state
-
-    /// Flag indicating if depth-of-field is computed for the current frame.
-    bool mComputeDOF = false;
+    bool mComputeDOF = false;           ///< Flag indicating if depth-of-field is computed for the current frame.
     ref<SampleGenerator> mpSampleGenerator;
+    std::unique_ptr<PixelDebug> mpPixelDebug;
+    bool mComputeDerivativeMaually = false;
 
     // UI variables
-
-    bool mUseTraceRayInline = false;
-    /// Option for enabling depth-of-field when camera's aperture radius is nonzero.
-    bool mUseDOF = true;
+    bool mUseTraceRayInline = true;
+    bool mUseDOF = false;                ///< Option for enabling depth-of-field when camera's aperture radius is nonzero.
 
     struct
     {
@@ -82,4 +82,5 @@ private:
     } mRaytrace;
 
     ref<ComputePass> mpComputePass;
+    ref<ComputePass> mpComputeDerivativesPass;
 };

@@ -19,6 +19,9 @@
 # User files.
 /CMakeUserPresets.json
 
+# Scenes
+/data/
+
 # File types.
 *.user
 *.suo
@@ -30,3 +33,7 @@
 *.mp4
 *.tlog
 *.bak
+*.exr
+*.png
+
+/results/gradient-pt/results/*
