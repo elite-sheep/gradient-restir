@@ -2,8 +2,9 @@
 
 This repository contains the source code for the paper:
 
-**Gradient-domain ReSTIR Path Tracing**
-Yu-Chen Wang, Tzu-Mao Li
+**[Gradient-domain ReSTIR Path Tracing](https://bulbaberry.xyz/publications/restir-gpt-eg-2026)**
+Yu-Chen Wang, Markus Kettunen, Daqi Lin, Chris Wyman, Lifan Wu, Shuang Zhao
+*Eurographics 2026*
 
 The implementation is built on top of NVIDIA's [Falcor](https://github.com/NVIDIAGameWorks/Falcor) rendering framework (version 7.0). See [README_Falcor.md](README_Falcor.md) for the original Falcor documentation.
 
@@ -136,10 +137,11 @@ scripts/
 ## Citation
 
 ```bibtex
-@article{Wang2025GradientReSTIR,
+@inproceedings{Wang2026GradientReSTIR,
     title   = {Gradient-domain ReSTIR Path Tracing},
-    author  = {Wang, Yu-Chen and Li, Tzu-Mao},
-    year    = {2025}
+    author  = {Wang, Yu-Chen and Kettunen, Markus and Lin, Daqi and Wyman, Chris and Wu, Lifan and Zhao, Shuang},
+    booktitle = {Eurographics},
+    year    = {2026}
 }
 ```
 
