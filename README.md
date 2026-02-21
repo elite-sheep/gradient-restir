@@ -19,43 +19,16 @@ The implementation is built on top of NVIDIA's [Falcor](https://github.com/NVIDI
 
 ## Building
 
-### 1. Clone the repository
-
 ```bash
 git clone --recursive git@github.com:elite-sheep/gradient-restir.git
 cd gradient-restir
-```
-
-### 2. Fetch dependencies
-
-```bash
-setup.bat
-```
-
-This script downloads external dependencies via packman and initializes git submodules.
-
-### 3. Build with Visual Studio 2022
-
-```bash
 setup_vs2022.bat
+msbuild build/windows-vs2022/Falcor.sln /p:Configuration=Release /m
 ```
 
-This generates a Visual Studio solution at `build/windows-vs2022/Falcor.sln`. Open it in Visual Studio, set the build configuration to **Release**, and build the solution. The output binaries are located in `build/windows-vs2022/bin/Release/`.
+The output binaries are located in `build/windows-vs2022/bin/Release/`.
 
-Alternatively, build from the command line:
-
-```bash
-cmake --preset windows-vs2022
-cmake --build build/windows-vs2022 --config Release
-```
-
-### Build with VS Code / Ninja
-
-```bash
-setup.bat
-```
-
-Open the project folder in VS Code, select the **Windows Ninja/MSVC** configure preset (`Ctrl+Shift+P` -> _CMake: Select Configure Preset_), then press `F7` to build. Binaries are output to `build/windows-ninja-msvc/bin/`.
+Note: Run the above commands from a **Developer Command Prompt for VS 2022** (or run `vcvarsall.bat` first) so that `msbuild` is available on the PATH.
 
 ## Running with Mogwai
 
