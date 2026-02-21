@@ -89,6 +89,92 @@ Mogwai.exe --headless -s scripts/GPathTracer.py -S <path-to-scene.pyscene>
 | `` ` `` (backtick) | Open Python console |
 | `P` | Toggle profiler |
 
+## Batch Rendering with Python Scripts
+
+The `python/` directory contains Python scripts for headless batch rendering and evaluation using Falcor's Python bindings. These scripts must be run with the Falcor-embedded Python interpreter (i.e., via `Mogwai.exe` or `FalcorPython.exe`).
+
+### Prerequisites
+
+Install the required Python packages:
+
+```bash
+pip install numpy pyexr tqdm yacs pympler
+```
+
+For Poisson reconstruction (`recon.py`), you also need the [screen-poisson-py](https://github.com/elite-sheep/screen-poisson-py) library built and accessible.
+
+### Scripts Overview
+
+| Script | Description |
+|---|---|
+| `python/render.py` | Batch rendering for static scenes (ground truth, gradient images, primal/reconstructed images) |
+| `python/render_dynamic.py` | Batch rendering for dynamic scenes with camera motion |
+| `python/config.py` | Configuration system using YACS (`GPathTracerConfig`, `CameraMotionConfig`) |
+| `python/common.py` | Shared utilities for testbed creation, scene loading, and render pass setup |
+| `python/recon.py` | Poisson reconstruction from gradient-domain renderings |
+| `python/camera_pbrt.py` | Utility to convert vertical FOV to focal length |
+
+### Rendering Ground Truth
+
+```bash
+python python/render.py gt --scene <path-to-scene.pyscene> --w 512 --h 512 --spp 16384 --max_bounces 5 --output_dir results/gt
+```
+
+This renders a high-spp ground truth image along with gradient images (DX, DY).
+
+### Rendering with a Config File
+
+Create a YAML config file (see `python/config.py` for all available options):
+
+```yaml
+type: "final"
+scene_path: "path/to/scene.pyscene"
+gt_path: "results/gt/gt_primal.exr"
+max_bounces: 5
+diff_integrator: 1
+shift_mapping_type: 2
+use_temporal: true
+use_spatial: true
+num_spatial_neighbours: 4
+num_initial_samples: 2
+num_iters: 128
+num_images: 4
+resolution: [1920, 1080]
+output_dir: "results/output"
+method_name: "multirestir"
+```
+
+Then run:
+
+```bash
+# Static scene rendering
+python python/render.py render --config_file <path-to-config.yaml>
+
+# Dynamic scene rendering (with camera motion)
+python python/render_dynamic.py render --config_file <path-to-config.yaml>
+```
+
+The `type` field in the config selects the rendering mode:
+
+| Type | Description |
+|---|---|
+| `final` | Full rendering (primal + DX/DY gradients + Poisson reconstruction) |
+| `dx` | Gradient (DX) image only |
+| `primal` | Primal (reconstructed) image only |
+| `primal_restir` | Primal image using ReSTIR |
+| `primal_gpt` | Primal image using gradient-domain path tracing |
+| `gpt_dx` | Gradient image using gradient-domain path tracing |
+
+### Poisson Reconstruction
+
+After rendering gradient-domain images, reconstruct the final image:
+
+```bash
+python python/recon.py --input_dir <rendering-output-dir> --num_images <N> --recon_type default --output_dir recon
+```
+
+This reads `primal/primal_*.exr`, `dx/dx_*.exr`, and `dy/dy_*.exr` from the input directory and writes reconstructed images to the output subdirectory.
+
 ## Project Structure
 
 ```
@@ -105,6 +191,13 @@ Source/
   Mogwai/                  # Interactive rendering application
 scripts/
   GPathTracer.py           # Render graph script for GPathTracer
+python/
+  render.py                # Batch rendering for static scenes
+  render_dynamic.py        # Batch rendering for dynamic scenes
+  config.py                # YACS-based configuration
+  common.py                # Shared utilities
+  recon.py                 # Poisson reconstruction
+  camera_pbrt.py           # FOV-to-focal-length utility
 ```
 
 ## Citation
