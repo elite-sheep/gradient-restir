@@ -12,3 +12,4 @@ dependencies:
     - pip
     - pip:
         - pyexr
+        - screen-poisson-py @ git+https://github.com/elite-sheep/screen-poisson-py.git
